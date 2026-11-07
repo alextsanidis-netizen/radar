@@ -174,7 +174,7 @@ async function joinGroup(){
 function initMap(){
   if(map)return;
   map=L.map('map',{zoomControl:false,attributionControl:true}).setView([40.6,22.95],12);
-  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',{maxZoom:16,attribution:'© Esri'}).addTo(map);
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,attribution:'© Esri'}).addTo(map);
   map.on('click',()=>{if(selected)closeDetail()});
 }
 async function loadAll(){
