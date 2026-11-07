@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b0b14">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Radar</title>
+<link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{--bg:#0b0b14;--card:#161624;--card2:#1f1f33;--txt:#f2f2f7;--mut:#9a9ab0;--acc:#7c5cff;--red:#ff4d6d;--grn:#2ecc71}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+button{font:inherit;border:0;cursor:pointer;border-radius:12px;padding:12px 16px;background:var(--card2);color:var(--txt)}
+button.pri{background:var(--acc);color:#fff;font-weight:600}
+button.dan{background:#3a1520;color:var(--red)}
+input{font:inherit;width:100%;padding:12px 14px;border-radius:12px;border:1px solid #2c2c44;background:#11111c;color:var(--txt);margin:6px 0}
+.hidden{display:none!important}
+#auth,#setup{max-width:380px;margin:0 auto;padding:60px 22px}
+h1{font-size:30px;margin:0 0 4px}.sub{color:var(--mut);margin:0 0 24px}
+.row{display:flex;gap:8px}.row>*{flex:1}
+#err{color:var(--red);min-height:20px;font-size:14px}
+#map{position:fixed;inset:0}
+.leaflet-container{background:#0d0d18}
+/* top bar */
+#top{position:fixed;top:0;left:0;right:0;z-index:500;display:flex;justify-content:space-between;padding:calc(10px + env(safe-area-inset-top)) 12px 10px;pointer-events:none}
+#top>*{pointer-events:auto}
+.round{width:46px;height:46px;border-radius:50%;padding:0;display:grid;place-items:center;background:rgba(22,22,36,.92);box-shadow:0 4px 14px #0008;font-size:20px}
+#gname{background:rgba(22,22,36,.92);border-radius:23px;padding:0 18px;display:flex;align-items:center;font-weight:600;box-shadow:0 4px 14px #0008}
+/* markers */
+.pin{position:relative;width:62px;height:72px}
+.pin .ring{width:58px;height:58px;border-radius:50%;border:4px solid var(--c);background:#222 center/cover no-repeat;box-shadow:0 4px 12px #000a;display:grid;place-items:center;font-weight:700;font-size:22px;color:#fff}
+.pin .tip{position:absolute;left:50%;bottom:4px;transform:translateX(-50%) rotate(45deg);width:12px;height:12px;background:var(--c)}
+.pin .bat{position:absolute;right:-4px;top:-4px;background:#111;border-radius:10px;padding:1px 5px;font-size:10px;font-weight:700;border:1px solid #333}
+.pin.off .ring{filter:grayscale(1) brightness(.7)}
+.pin.lost .ring{animation:pulse 1.2s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 #ff4d6dcc}100%{box-shadow:0 0 0 18px #ff4d6d00}}
+/* sheet */
+#sheet{position:fixed;left:0;right:0;bottom:0;z-index:600;background:var(--card);border-radius:22px 22px 0 0;box-shadow:0 -6px 24px #000a;max-height:62vh;display:flex;flex-direction:column;padding-bottom:env(safe-area-inset-bottom);transition:max-height .25s}
+#sheet.min{max-height:150px}
+#grab{padding:10px 0 4px;display:grid;place-items:center;cursor:pointer}
+#grab i{width:42px;height:5px;border-radius:3px;background:#3a3a55}
+#list{overflow:auto;padding:0 10px 10px}
+.dev{display:flex;align-items:center;gap:12px;padding:10px;border-radius:14px;cursor:pointer}
+.dev:hover,.dev.sel{background:var(--card2)}
+.av{width:50px;height:50px;border-radius:50%;flex:none;border:3px solid var(--c);background:#222 center/cover no-repeat;display:grid;place-items:center;font-weight:700;font-size:20px}
+.dev .meta{flex:1;min-width:0}.dev .nm{font-weight:600}.dev .st{color:var(--mut);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dev .b{font-size:13px;color:var(--mut);text-align:right}
+.lostTag{color:var(--red);font-weight:700;font-size:12px}
+#detail{padding:0 16px 16px;overflow:auto}
+#detail .hd{display:flex;align-items:center;gap:14px;margin:6px 0 14px}
+#detail .hd .av{width:64px;height:64px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.grid button{display:flex;flex-direction:column;align-items:center;gap:4px;padding:14px 8px;font-size:13px}
+.grid button span{font-size:22px}
+.addr{color:var(--mut);font-size:14px;margin:-6px 0 12px}
+/* modal */
+#modal{position:fixed;inset:0;z-index:900;background:#000b;display:grid;place-items:center;padding:16px}
+#modal .box{background:var(--card);border-radius:20px;padding:20px;width:100%;max-width:400px;max-height:90vh;overflow:auto}
+.code{font-size:40px;letter-spacing:8px;font-weight:800;text-align:center;background:#11111c;border-radius:14px;padding:14px;margin:12px 0;color:var(--acc)}
+.colors{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
+.colors i{width:32px;height:32px;border-radius:50%;cursor:pointer;border:3px solid transparent}
+.colors i.on{border-color:#fff}
+.avpick{display:flex;align-items:center;gap:14px;margin:10px 0}
+.avpick .av{width:72px;height:72px;cursor:pointer}
+label.small{font-size:13px;color:var(--mut)}
+#toast{position:fixed;top:calc(70px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);z-index:1000;background:#222238;padding:10px 18px;border-radius:20px;box-shadow:0 4px 14px #0008;font-size:14px}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="auth" class="hidden">
+  <h1>📡 Radar</h1><p class="sub">Οι συσκευές σου, πάντα στον χάρτη.</p>
+  <input id="email" type="email" placeholder="Email" autocomplete="email">
+  <input id="pass" type="password" placeholder="Κωδικός (6+ χαρακτήρες)" autocomplete="current-password">
+  <div id="err"></div>
+  <div class="row"><button class="pri" onclick="login()">Σύνδεση</button><button onclick="signup()">Νέος λογαριασμός</button></div>
+</div>
+
+<!-- FIRST SETUP -->
+<div id="setup" class="hidden">
+  <h1>Η ομάδα σου</h1><p class="sub">Φτιάξε νέα ομάδα ή μπες σε υπάρχουσα με κωδικό πρόσκλησης.</p>
+  <input id="dname" placeholder="Το όνομά σου (π.χ. Αλέξανδρος)">
+  <input id="gnew" placeholder="Όνομα νέας ομάδας (π.χ. Τσανίδης)">
+  <button class="pri" style="width:100%" onclick="createGroup()">Δημιουργία ομάδας</button>
+  <p class="sub" style="text-align:center;margin:18px 0 6px">ή</p>
+  <input id="gcode" placeholder="Κωδικός πρόσκλησης" style="text-transform:uppercase">
+  <button style="width:100%" onclick="joinGroup()">Είσοδος σε ομάδα</button>
+  <div id="err2" style="color:var(--red);margin-top:10px"></div>
+</div>
+
+<!-- MAP -->
+<div id="app" class="hidden">
+  <div id="map"></div>
+  <div id="top">
+    <button class="round" onclick="openSettings()">☰</button>
+    <div id="gname">—</div>
+    <button class="round" onclick="fitAll()">◎</button>
+  </div>
+  <div id="sheet">
+    <div id="grab" onclick="toggleSheet()"><i></i></div>
+    <div id="list"></div>
+    <div id="detail" class="hidden"></div>
+  </div>
+</div>
+
+<div id="modal" class="hidden" onclick="if(event.target===this)closeModal()"><div class="box" id="mbox"></div></div>
+<div id="toast" class="hidden"></div>
+
+<script>
+const SB_URL = 'https://aatahzoqkxmymlzufhti.supabase.co';
+const SB_KEY = 'sb_publishable_j4KSHa_4Po3n0i03BeWSnw_tlKd6C5x';
+const sb = supabase.createClient(SB_URL, SB_KEY);
+const COLORS = ['#7c5cff','#ff4d6d','#2ecc71','#00b4d8','#ffb703','#f72585','#e85d04','#c0c0d0'];
+const OFFLINE_MIN = 20;
+
+let me=null, group=null, members={}, devices={}, markers={}, selected=null, trail=null, map=null, chan=null;
+const $ = id => document.getElementById(id);
+const esc = s => String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function show(id){['auth','setup','app'].forEach(x=>$(x).classList.toggle('hidden',x!==id))}
+function toast(t){$('toast').textContent=t;$('toast').classList.remove('hidden');clearTimeout(toast.t);toast.t=setTimeout(()=>$('toast').classList.add('hidden'),2600)}
+function ago(ts){if(!ts)return 'ποτέ';const s=(Date.now()-new Date(ts))/1000;if(s<60)return 'μόλις τώρα';if(s<3600)return `πριν ${Math.floor(s/60)} λεπ.`;if(s<86400)return `πριν ${Math.floor(s/3600)} ώρ.`;return `πριν ${Math.floor(s/86400)} μέρ.`}
+const isOff = d => !d.last_seen || (Date.now()-new Date(d.last_seen))/60000 > OFFLINE_MIN;
+const batIcon = d => d.battery==null?'':(d.charging?'⚡':'🔋')+d.battery+'%';
+function avStyle(d){return `--c:${d.color};${d.avatar?`background-image:url('${d.avatar}')`:''}`}
+const initial = d => d.avatar?'':esc((d.name||'?')[0].toUpperCase());
+
+// ---------- AUTH ----------
+async function login(){
+  $('err').textContent='';
+  const {error}=await sb.auth.signInWithPassword({email:$('email').value.trim(),password:$('pass').value});
+  if(error)$('err').textContent=error.message.includes('confirm')?'Επιβεβαίωσε πρώτα το email σου (δες τα εισερχόμενα).':'Λάθος email ή κωδικός.';
+}
+async function signup(){
+  $('err').textContent='';
+  const {data,error}=await sb.auth.signUp({email:$('email').value.trim(),password:$('pass').value,options:{emailRedirectTo:location.href.split('#')[0]}});
+  if(error)return $('err').textContent=error.message;
+  if(!data.session)$('err').style.color='var(--grn)',$('err').textContent='Σου στείλαμε email επιβεβαίωσης. Πάτα το link και μετά «Σύνδεση».';
+}
+async function logout(){await sb.auth.signOut();location.reload()}
+
+sb.auth.onAuthStateChange((ev,session)=>{
+  if(session?.user && (!me || me.id!==session.user.id)){me=session.user;boot()}
+  if(!session){me=null;show('auth')}
+});
+
+// ---------- GROUP ----------
+async function boot(){
+  const {data:gm}=await sb.from('group_members').select('group_id, groups(id,name,invite_code)').eq('user_id',me.id).limit(1);
+  if(!gm||!gm.length)return show('setup');
+  group=gm[0].groups;
+  $('gname').textContent=group.name;
+  show('app'); initMap(); await loadAll(); subscribe();
+}
+async function createGroup(){
+  const n=$('gnew').value.trim(), d=$('dname').value.trim();
+  if(!n||!d)return $('err2').textContent='Συμπλήρωσε το όνομά σου και το όνομα ομάδας.';
+  const {error}=await sb.rpc('create_group',{p_name:n,p_display:d});
+  if(error)return $('err2').textContent=error.message; boot();
+}
+async function joinGroup(){
+  const c=$('gcode').value.trim(), d=$('dname').value.trim();
+  if(!c||!d)return $('err2').textContent='Συμπλήρωσε το όνομά σου και τον κωδικό.';
+  const {error}=await sb.rpc('join_group',{p_code:c,p_display:d});
+  if(error)return $('err2').textContent=error.message; boot();
+}
+
+// ---------- MAP ----------
+function initMap(){
+  if(map)return;
+  map=L.map('map',{zoomControl:false,attributionControl:true}).setView([40.6,22.95],12);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{maxZoom:19,attribution:'© OpenStreetMap © CARTO'}).addTo(map);
+  map.on('click',()=>{if(selected)closeDetail()});
+}
+async function loadAll(){
+  const [{data:ms},{data:ds}]=await Promise.all([
+    sb.from('group_members').select('user_id,display_name').eq('group_id',group.id),
+    sb.from('devices').select('*').eq('group_id',group.id).order('created_at')
+  ]);
+  members={};(ms||[]).forEach(m=>members[m.user_id]=m.display_name);
+  devices={};(ds||[]).forEach(d=>devices[d.id]=d);
+  renderAll(); fitAll();
+}
+function subscribe(){
+  if(chan)sb.removeChannel(chan);
+  chan=sb.channel('dev').on('postgres_changes',{event:'*',schema:'public',table:'devices',filter:`group_id=eq.${group.id}`},p=>{
+    if(p.eventType==='DELETE'){delete devices[p.old.id]}
+    else devices[p.new.id]=p.new;
+    renderAll();
+    if(selected && devices[selected])renderDetail();
+  }).subscribe();
+  setInterval(renderAll,60000); // refresh "πριν Χ λεπτά"
+}
+function pinHtml(d){
+  return `<div class="pin ${isOff(d)?'off':''} ${d.lost_mode?'lost':''}" style="--c:${d.color}">
+    <div class="ring" style="${avStyle(d)}">${initial(d)}</div><div class="tip"></div>
+    ${d.battery!=null?`<div class="bat">${d.battery}%</div>`:''}</div>`;
+}
+function renderAll(){
+  // markers
+  for(const id in markers)if(!devices[id]){map.removeLayer(markers[id]);delete markers[id]}
+  for(const d of Object.values(devices)){
+    if(d.lat==null)continue;
+    const icon=L.divIcon({html:pinHtml(d),className:'',iconSize:[62,72],iconAnchor:[31,70]});
+    if(markers[d.id])markers[d.id].setLatLng([d.lat,d.lng]).setIcon(icon);
+    else markers[d.id]=L.marker([d.lat,d.lng],{icon}).addTo(map).on('click',()=>select(d.id));
+  }
+  // list
+  const list=Object.values(devices);
+  $('list').innerHTML = list.map(d=>`
+    <div class="dev ${selected===d.id?'sel':''}" onclick="select('${d.id}')">
+      <div class="av" style="${avStyle(d)}">${initial(d)}</div>
+      <div class="meta"><div class="nm">${esc(d.name)} ${d.lost_mode?'<span class="lostTag">ΧΑΜΕΝΟ</span>':''}</div>
+        <div class="st">${esc(members[d.owner_id]||'')} · ${!d.paired?'δεν έχει συνδεθεί':(isOff(d)?'εκτός σύνδεσης · ':'')+ago(d.last_seen)}</div></div>
+      <div class="b">${batIcon(d)}</div>
+    </div>`).join('') + `<button class="pri" style="width:100%;margin-top:8px" onclick="addDeviceModal()">＋ Προσθήκη συσκευής</button>`;
+}
+function fitAll(){
+  const pts=Object.values(devices).filter(d=>d.lat!=null).map(d=>[d.lat,d.lng]);
+  if(pts.length===1)map.setView(pts[0],15);else if(pts.length)map.fitBounds(pts,{padding:[70,70],maxZoom:16});
+}
+function toggleSheet(){$('sheet').classList.toggle('min')}
+
+// ---------- DETAIL ----------
+function select(id){
+  selected=id; $('sheet').classList.remove('min');
+  const d=devices[id]; if(d.lat!=null)map.setView([d.lat,d.lng],Math.max(map.getZoom(),16));
+  $('list').classList.add('hidden'); $('detail').classList.remove('hidden');
+  renderDetail(); loadAddress(d);
+}
+function closeDetail(){selected=null;if(trail){map.removeLayer(trail);trail=null}$('detail').classList.add('hidden');$('list').classList.remove('hidden');renderAll()}
+function renderDetail(){
+  const d=devices[selected]; if(!d)return closeDetail();
+  $('detail').innerHTML=`
+   <div class="hd"><div class="av" style="${avStyle(d)}">${initial(d)}</div>
+     <div style="flex:1"><div style="font-size:20px;font-weight:700">${esc(d.name)} ${d.lost_mode?'<span class="lostTag">ΧΑΜΕΝΟ</span>':''}</div>
+     <div class="st" style="color:var(--mut);font-size:13px">${esc(d.model||'')} · ${esc(members[d.owner_id]||'')}<br>${d.paired?ago(d.last_seen):'Δεν έχει συνδεθεί ακόμα'} ${batIcon(d)} ${d.accuracy?`· ±${Math.round(d.accuracy)}μ`:''}</div></div>
+     <button class="round" onclick="closeDetail()">✕</button></div>
+   <div class="addr" id="addr"></div>
+   <div class="grid">
+     <button onclick="cmd('ring')"><span>🔊</span>Κάνε ήχο</button>
+     <button onclick="cmd('locate')"><span>📍</span>Εντόπισε τώρα</button>
+     <button onclick="cmd('${d.lost_mode?'lost_off':'lost_on'}')" ${d.lost_mode?'class="dan"':''}><span>🚨</span>${d.lost_mode?'Βρέθηκε':'Χάθηκε / Κλοπή'}</button>
+     <button onclick="showTrail()"><span>🧭</span>Διαδρομή 24ώρου</button>
+     <button onclick="${d.lat!=null?`window.open('https://www.google.com/maps/dir/?api=1&destination=${d.lat},${d.lng}')`:''}"><span>🚗</span>Οδηγίες</button>
+     <button onclick="editModal('${d.id}')"><span>✏️</span>Επεξεργασία</button>
+   </div>
+   ${!d.paired?`<button class="pri" style="width:100%;margin-top:10px" onclick="repair('${d.id}')">Κωδικός σύνδεσης</button>`:''}`;
+}
+async function loadAddress(d){
+  if(d.lat==null)return;
+  try{
+    const r=await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${d.lat}&lon=${d.lng}&zoom=18&accept-language=el`);
+    const j=await r.json(); if(selected===d.id && $('addr'))$('addr').textContent='📍 '+(j.display_name||'').split(',').slice(0,3).join(',');
+  }catch(e){}
+}
+async function cmd(type){
+  const {error}=await sb.from('commands').insert({device_id:selected,type});
+  if(error)return toast('Σφάλμα: '+error.message);
+  toast({ring:'Η συσκευή θα χτυπήσει μέσα σε ~30″',locate:'Ζητήθηκε νέα θέση',lost_on:'Λειτουργία απώλειας: θέση κάθε 15″',lost_off:'Λειτουργία απώλειας έκλεισε'}[type]);
+}
+async function showTrail(){
+  const since=new Date(Date.now()-864e5).toISOString();
+  const {data}=await sb.from('locations').select('lat,lng,created_at').eq('device_id',selected).gte('created_at',since).order('created_at');
+  if(trail)map.removeLayer(trail);
+  if(!data||data.length<2)return toast('Δεν υπάρχει αρκετό ιστορικό ακόμα');
+  const pts=data.map(p=>[p.lat,p.lng]);
+  trail=L.layerGroup([L.polyline(pts,{color:devices[selected].color,weight:4,opacity:.85}),
+    ...data.filter((_,i)=>i%Math.ceil(data.length/12)===0).map(p=>L.circleMarker([p.lat,p.lng],{radius:4,color:'#fff',weight:1,fillColor:devices[selected].color,fillOpacity:1}).bindTooltip(new Date(p.created_at).toLocaleTimeString('el-GR',{hour:'2-digit',minute:'2-digit'})))]).addTo(map);
+  map.fitBounds(pts,{padding:[60,60]});
+}
+
+// ---------- ADD / EDIT ----------
+let draft={};
+function closeModal(){$('modal').classList.add('hidden')}
+function openModal(h){$('mbox').innerHTML=h;$('modal').classList.remove('hidden')}
+function formHtml(title,btn,fn){
+  return `<h2 style="margin-top:0">${title}</h2>
+   <div class="avpick"><div class="av" id="avp" style="${avStyle(draft)}" onclick="$('file').click()">${draft.avatar?'':'📷'}</div>
+   <div><label class="small">Πάτα για φωτογραφία προφίλ<br>(π.χ. την εικόνα της Έλσας)</label></div></div>
+   <input type="file" id="file" accept="image/*" class="hidden" onchange="pickAvatar(this)">
+   <label class="small">Όνομα</label><input id="dn" value="${esc(draft.name||'')}" placeholder="π.χ. Έλσα, Ελίτα, Άριελ">
+   <label class="small">Χρώμα</label><div class="colors">${COLORS.map(c=>`<i style="background:${c}" class="${draft.color===c?'on':''}" onclick="draft.color='${c}';document.querySelectorAll('.colors i').forEach(x=>x.classList.remove('on'));this.classList.add('on');$('avp').style.setProperty('--c','${c}')"></i>`).join('')}</div>
+   <div class="row" style="margin-top:14px"><button onclick="closeModal()">Άκυρο</button><button class="pri" onclick="${fn}">${btn}</button></div>`;
+}
+function pickAvatar(inp){
+  const f=inp.files[0]; if(!f)return;
+  const img=new Image(); img.onload=()=>{
+    const s=160,c=document.createElement('canvas');c.width=c.height=s;
+    const k=Math.min(img.width,img.height),x=c.getContext('2d');
+    x.drawImage(img,(img.width-k)/2,(img.height-k)/2,k,k,0,0,s,s);
+    draft.avatar=c.toDataURL('image/jpeg',.82);
+    const a=$('avp');a.style.backgroundImage=`url('${draft.avatar}')`;a.textContent='';
+  }; img.src=URL.createObjectURL(f);
+}
+function addDeviceModal(){draft={color:COLORS[Object.keys(devices).length%COLORS.length]};openModal(formHtml('Νέα συσκευή','Συνέχεια','saveNew()'))}
+async function saveNew(){
+  const name=$('dn').value.trim(); if(!name)return toast('Δώσε όνομα');
+  const {data,error}=await sb.rpc('add_device',{p_group:group.id,p_name:name,p_avatar:draft.avatar||null,p_color:draft.color});
+  if(error)return toast(error.message);
+  await loadAll(); codeModal(name,data.pair_code);
+}
+function codeModal(name,code){
+  openModal(`<h2 style="margin-top:0">Σύνδεσε τη συσκευή «${esc(name)}»</h2>
+   <p class="sub" style="margin:0">Άνοιξε την εφαρμογή Radar στη συσκευή και γράψε αυτόν τον κωδικό:</p>
+   <div class="code">${esc(code)}</div><p class="small" style="color:var(--mut)">Ισχύει για 30 λεπτά.</p>
+   <button class="pri" style="width:100%" onclick="closeModal()">Εντάξει</button>`);
+}
+async function repair(id){
+  if(devices[id].paired && !confirm('Η συσκευή θα αποσυνδεθεί μέχρι να βάλεις τον νέο κωδικό. Συνέχεια;'))return;
+  const {data,error}=await sb.rpc('new_pair_code',{p_device:id}); if(error)return toast(error.message);
+  codeModal(devices[id].name,data);
+}
+function editModal(id){
+  draft={...devices[id]};
+  openModal(formHtml('Επεξεργασία','Αποθήκευση',`saveEdit('${id}')`)+
+   `<button style="width:100%;margin-top:10px" onclick="closeModal();repair('${id}')">Νέος κωδικός σύνδεσης</button>
+    <button class="dan" style="width:100%;margin-top:8px" onclick="delDev('${id}')">Διαγραφή συσκευής</button>`);
+}
+async function saveEdit(id){
+  const {error}=await sb.from('devices').update({name:$('dn').value.trim()||draft.name,avatar:draft.avatar,color:draft.color}).eq('id',id);
+  if(error)return toast(error.message); closeModal(); toast('Αποθηκεύτηκε');
+}
+async function delDev(id){
+  if(!confirm('Διαγραφή της συσκευής και του ιστορικού της;'))return;
+  const {error}=await sb.from('devices').delete().eq('id',id);
+  if(error)return toast('Μόνο ο ιδιοκτήτης μπορεί να τη διαγράψει');
+  closeModal(); closeDetail(); delete devices[id]; renderAll();
+}
+
+// ---------- SETTINGS ----------
+function openSettings(){
+  openModal(`<h2 style="margin-top:0">${esc(group.name)}</h2>
+   <p class="small" style="color:var(--mut)">Μέλη: ${Object.values(members).map(esc).join(', ')}</p>
+   <label class="small">Κωδικός πρόσκλησης (δώσ' τον στον Δημήτρη)</label>
+   <div class="code" style="font-size:28px">${esc(group.invite_code)}</div>
+   <p class="small" style="color:var(--mut)">Συνδεδεμένος ως ${esc(me.email)}</p>
+   <div class="row"><button onclick="closeModal()">Κλείσιμο</button><button class="dan" onclick="logout()">Αποσύνδεση</button></div>`);
+}
+
+(async()=>{const {data}=await sb.auth.getSession(); if(!data.session)show('auth')})();
+</script>
+</body>
+</html>
