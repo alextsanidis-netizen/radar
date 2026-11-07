@@ -100,7 +100,10 @@ label.small{font-size:13px;color:var(--mut)}
   <div id="top">
     <button class="round" onclick="openSettings()">☰</button>
     <div id="gname">—</div>
-    <button class="round" onclick="fitAll()">◎</button>
+    <div style="display:flex;gap:8px">
+      <button class="round" onclick="mapStyleModal()">🗺️</button>
+      <button class="round" onclick="fitAll()">◎</button>
+    </div>
   </div>
   <div id="sheet">
     <div id="grab" onclick="toggleSheet()"><i></i></div>
@@ -171,10 +174,30 @@ async function joinGroup(){
 }
 
 // ---------- MAP ----------
+const BASEMAPS = {
+  street: {name:'Δρόμοι', emoji:'🗺️', url:'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', opts:{maxZoom:19,attribution:'© Esri'}},
+  dark: {name:'Σκούρο', emoji:'🌙', url:'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', opts:{maxZoom:16,attribution:'© Esri'}},
+  sat: {name:'Δορυφόρος', emoji:'🛰️', url:'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', opts:{maxZoom:19,attribution:'© Esri'}}
+};
+let tileLayer=null;
+function setBasemap(id){
+  if(!BASEMAPS[id])id='street';
+  if(tileLayer)map.removeLayer(tileLayer);
+  const b=BASEMAPS[id];
+  tileLayer=L.tileLayer(b.url,b.opts).addTo(map);
+  localStorage.setItem('basemap',id);
+  closeModal();
+}
+function mapStyleModal(){
+  const cur=localStorage.getItem('basemap')||'street';
+  openModal(`<h2 style="margin-top:0">Στυλ χάρτη</h2>
+   ${Object.entries(BASEMAPS).map(([id,b])=>`<button style="width:100%;margin-top:8px;text-align:left;${id===cur?'background:var(--acc);color:#fff':''}" onclick="setBasemap('${id}')">${b.emoji} ${b.name}</button>`).join('')}
+   <button style="width:100%;margin-top:14px" onclick="closeModal()">Κλείσιμο</button>`);
+}
 function initMap(){
   if(map)return;
   map=L.map('map',{zoomControl:false,attributionControl:true}).setView([40.6,22.95],12);
-  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,attribution:'© Esri'}).addTo(map);
+  setBasemap(localStorage.getItem('basemap')||'street');
   map.on('click',()=>{if(selected)closeDetail()});
 }
 async function loadAll(){
